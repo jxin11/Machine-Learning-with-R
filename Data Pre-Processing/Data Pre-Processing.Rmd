@@ -1,5 +1,5 @@
 ---
-title: "Lab3"
+title: "Data Pre-Processing"
 author: "Goh Jie Xin"
 date: "10/4/2021"
 output:
@@ -29,7 +29,7 @@ library(caret)
 ```{r}
 # Convert "NA" or Blanks to NA
 # Convert String Type to Factor
-df <- read.csv('C:/Users/GL63/OneDrive - Asia Pacific University/6. Applied Machine Learning/Lab/aug_train.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
+df <- read.csv('aug_train.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
 
 head(df,5)
 
@@ -168,7 +168,7 @@ As MICE method takes time to run, the output is exported. (aug_train_mice.csv)
 # df_impute_mice <- complete(df_impute_mice)
 # plot_missing(df_impute_mice)
 # write.csv(df_impute_mice, file = "aug_train_mice.csv")
-df_impute_mice <- read.csv('C:/Users/GL63/OneDrive - Asia Pacific University/6. Applied Machine Learning/Lab/Lab 3/aug_train_mice.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
+df_impute_mice <- read.csv('aug_train_mice.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
 ```
 
 
@@ -181,7 +181,7 @@ As missForest method takes time to run, the output is exported (aug_train_mF.csv
 # df_mF <- (df_mF$ximp)
 # plot_missing(df_mF)
 # write.csv(df_mF, file = "aug_train_mF.csv")
-df_mF <- read.csv('C:/Users/GL63/OneDrive - Asia Pacific University/6. Applied Machine Learning/Lab/Lab 3/aug_train_mF.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
+df_mF <- read.csv('aug_train_mF.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
 ```
 
 Compare 3 methods of imputation.
