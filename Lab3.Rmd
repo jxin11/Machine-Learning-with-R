@@ -1,0 +1,351 @@
+---
+title: "Lab3"
+author: "Goh Jie Xin"
+date: "10/4/2021"
+output:
+  html_document: default
+  pdf_document: default
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+# Libraries
+
+```{r}
+library(dplyr)
+library(DataExplorer)
+library(mice)
+library(VIM)
+library(missForest)
+library(caret)
+```
+
+
+# Read Data
+
+```{r}
+# Convert "NA" or Blanks to NA
+# Convert String Type to Factor
+df <- read.csv('C:/Users/GL63/OneDrive - Asia Pacific University/6. Applied Machine Learning/Lab/aug_train.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
+
+head(df,5)
+
+# If the df has blanks, fill in with NA
+df <- mutate_all(df, na_if, "")
+```
+
+
+# Remove unrelated column
+
+1. Column enrollee_id does not give any useful information, so we can delete the column.
+2. Column city and city_development_index is correlated. Same city will have same city_development_index, so we can remove column city (as it has too many categories).
+```{r}
+# Aggregate function (Group by and Count Unique)
+plot(aggregate( df$city_development_index~df$city,df, function(x) length(unique(x))))
+
+# Remove columns
+df$enrollee_id <- NULL
+df$city <- NULL
+```
+
+
+# Convert Column Format
+
+1. Column target is in num type. We need to convert to factor type.
+```{r}
+# Convert column format to factor
+df$target <- as.factor(df$target)
+```
+
+2. Column experience is factor type. We can convert to num type but before convert need to replace:
+   "<1" --> "0" --> 0
+   ">20" --> "21"  --> 21
+```{r}
+print("Before conversion: ")
+levels(df$experience)
+levels(df$experience) <- c(levels(df$experience),"0","21")
+df$experience[df$experience=="<1"]  <- "0" 
+df$experience[df$experience==">20"]  <- "21"
+# Convert from factor to numeric
+df$experience <- as.numeric(as.character(df$experience))
+print("After conversion: ")
+hist(df$experience)
+```
+
+3. Column last_new_job is factor type. We can convert to num type but before convert need to replace:
+   ">4" --> "5"
+   "never" --> "0"
+```{r}
+print("Before conversion: ")
+levels(df$last_new_job)
+levels(df$last_new_job) <- c(levels(df$last_new_job),"5","0")
+df$last_new_job[df$last_new_job==">4"]  <- "5" 
+df$last_new_job[df$last_new_job=="never"]  <- "0"
+# COnvert from factor to numeric
+df$last_new_job <- as.numeric(as.character(df$last_new_job))
+print("After conversion: ")
+hist(df$last_new_job)
+
+write.csv(df, file = "aug_train2.csv")
+```
+
+
+# Handling Missing Values
+
+Check if there is any missing values.
+```{r}
+# View missing values
+colSums(is.na(df))
+plot_missing(df)
+```
+There are 8 columns with missing values. Instead of removing those columns, we will try to fill in the missing values with different method.
+
+## Method 1 - Imputation
+1. Continuous column - fill NA by mean.
+   na.rm = True : ignore NA when computing mean
+2. Factor column - fill NA by mode
+```{r}
+# Method 1 - Imputation
+
+# Impute continuous var (mean)
+dfImputation <- df
+contCol <- names(dfImputation)[sapply(dfImputation, is.numeric)]
+for (col in contCol){
+   sumNA <- sum(is.na(df[[col]]))
+   dfImputation[ ,col][is.na(dfImputation[ ,col])] <- mean(dfImputation[ ,col], na.rm=TRUE)
+   # Plot Density Plot Before & After Imputation
+   plot(density(na.omit(df[[col]])),
+        main=sprintf("Density plot of %s (Initial NA count: %d)", col,  sumNA))
+   lines(density(dfImputation[[col]]),col="red")
+   legend("topright", cex=0.8, horiz=TRUE,
+          c("Before Imputation", "After Imputation"),
+          lty = 1, lwd = 2, col = c("black", "red"))
+
+}
+
+# Impute factor var 
+facCol <- names(dfImputation)[sapply(dfImputation, is.factor)]
+for (col in facCol){
+   sumNA <- sum(is.na(df[[col]]))
+   mode <- function(x){levels(x)[which.max(tabulate(x))]}  # Function to obtain mode
+   dfImputation[ ,col][is.na(dfImputation[ ,col])] <-  mode(df[[col]])
+   # Prepare data to plot graph
+   colType <- c(rep("Before Imputation", dim(df)[1]), 
+                rep("After Imputation", dim(dfImputation)[1]))
+   colVal <- c(as.character(df[,col]), as.character(dfImputation[,col]))
+   outcome_data <- as.data.frame(unclass(cbind(colType, colVal)),
+                                 stringsAsFactors = TRUE)
+   outcome_data <- data.frame(Type = factor(colType, 
+                                            levels = c("Before Imputation", "After Imputation")),
+                                            Category = colVal)
+   # Plot side by side bar chart
+   print(ggplot(data = data.frame(table(outcome_data)), aes(x = Category, y = Freq, fill = Type)) +
+          geom_bar(stat = "identity", position = position_dodge(), alpha = 0.75)  +
+          geom_text(aes(label = Freq), fontface = "bold", vjust = 1.5,
+            position = position_dodge(.9), size = 4) +
+          labs(x = col, y = "Frequency", 
+               title = sprintf(" %s (Initial NA count: %d)", col,  sumNA)) +
+         theme(plot.title = element_text(hjust = 0.5),
+               axis.title.x = element_text(face="bold", colour="black", size = 12),
+               axis.title.y = element_text(face="bold", colour="black", size = 12),
+               legend.title = element_text(face="bold", size = 10)))
+
+}
+
+```
+
+
+## Method 2 - MICE
+Setting: 5 iterations, cart (imputation by classification & regression trees)
+As MICE method takes time to run, the output is exported. (aug_train_mice.csv)
+```{r}
+# Method 2 - MICE
+# mice return list, use complete() to convert to df
+# df_impute_mice <- mice(df, 5, method="cart")
+# df_impute_mice <- complete(df_impute_mice)
+# plot_missing(df_impute_mice)
+# write.csv(df_impute_mice, file = "aug_train_mice.csv")
+df_impute_mice <- read.csv('C:/Users/GL63/OneDrive - Asia Pacific University/6. Applied Machine Learning/Lab/Lab 3/aug_train_mice.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
+```
+
+
+## Method 3 - missForest
+Setting: 5 iterations
+As missForest method takes time to run, the output is exported (aug_train_mF.csv)
+```{r}
+# Method 3 - missForest
+# df_mF <- missForest(df, maxiter = 5)
+# df_mF <- (df_mF$ximp)
+# plot_missing(df_mF)
+# write.csv(df_mF, file = "aug_train_mF.csv")
+df_mF <- read.csv('C:/Users/GL63/OneDrive - Asia Pacific University/6. Applied Machine Learning/Lab/Lab 3/aug_train_mF.csv', header = T, na.strings=c("NA","NaN", ""), stringsAsFactors=T)
+```
+
+Compare 3 methods of imputation.
+```{r}
+# Plot graph
+
+# Continuous Column
+contCol <- names(dfImputation)[sapply(dfImputation, is.numeric)]
+for (col in contCol){
+   sumNA <- sum(is.na(df[[col]]))
+   # Plot Density Plot Before & After Imputation
+   plot(density(na.omit(df[[col]])),
+        main=sprintf("Density plot of %s (Initial NA count: %d)", col,  sumNA))
+   lines(density(dfImputation[[col]]),col="red")
+   lines(density(df_impute_mice[[col]]),col="blue")
+   lines(density(df_mF[[col]]),col="brown")
+   legend("topright", cex=0.7, horiz=TRUE,
+          c("Original", "Impute by Mean", "MICE", "missForest"),
+          lty = 1, lwd = 2, col = c("black", "red", "blue", "green"))
+}
+
+# Categorical variable
+# Impute factor var 
+facCol <- names(dfImputation)[sapply(dfImputation, is.factor)]
+for (col in facCol){
+   sumNA <- sum(is.na(df[[col]]))
+   # Prepare data to plot graph
+   colType <- c(rep("Original", dim(df)[1]), 
+                rep("Impute by Mode", dim(dfImputation)[1]),
+                rep("MICE", dim(df_impute_mice)[1]),
+                rep("missForest", dim(df_mF)[1]))
+   colVal <- c(as.character(df[,col]), as.character(dfImputation[,col]),
+               as.character(df_impute_mice[,col]), as.character(df_mF[,col]))
+   outcome_data <- as.data.frame(unclass(cbind(colType, colVal)),
+                                 stringsAsFactors = TRUE)
+   outcome_data <- data.frame(Type = factor(colType, 
+                                            levels = c("Original", "Impute by Mode", 
+                                                       "MICE", "missForest")),
+                                            Category = colVal)
+   # Plot side by side bar chart
+   print(ggplot(data = data.frame(table(outcome_data)), aes(x = Category, y = Freq, fill = Type)) +
+          geom_bar(stat = "identity", position = position_dodge(), alpha = 0.75)  +
+          geom_text(aes(label = Freq), vjust = 1.5,
+            position = position_dodge(.9), size = 2) +
+          labs(x = col, y = "Frequency", 
+               title = sprintf(" %s (Initial NA count: %d)", col,  sumNA)) +
+         theme(plot.title = element_text(hjust = 0.5),
+               axis.title.x = element_text(face="bold", colour="black", size = 12),
+               axis.title.y = element_text(face="bold", colour="black", size = 12),
+               legend.title = element_text(face="bold", size = 10)))
+}
+```
+
+
+**The following will use df_impute_mice instead of the original df.
+
+
+# Data Encoding
+Reference: https://www.r-bloggers.com/2020/02/a-guide-to-encoding-categorical-features-using-r/
+Encoding for categorical features:
+Nominal - One Hot Encoding
+Ordinal - defined order
+
+## Encoding - Ordinal Variables
+Ordinal variables: education_level, company_size
+```{r}
+ordinalCol = c("education_level", "company_size")
+
+# Encoding for Ordinal Variable, Follow defined order
+encode_ordinal <- function(x, order = unique(x)) {
+  x <- as.numeric(factor(x, levels = order, exclude = NULL))
+  x
+}
+
+df_impute_mice_encoded <- df_impute_mice
+
+# Column education_level
+levels(df_impute_mice_encoded$education_level)
+table(df_impute_mice_encoded[["education_level"]],
+      encode_ordinal(df_impute_mice_encoded[["education_level"]],
+      order = c("Primary School", "High School", "Graduate", "Masters", "Phd")),
+      useNA = "ifany")
+
+# Column company_size
+levels(df_impute_mice_encoded$company_size)
+table(df_impute_mice_encoded[["company_size"]],
+      encode_ordinal(df_impute_mice_encoded[["company_size"]],
+      order = c("<10", "10/49", "50-99", "100-500", "500-999", 
+                "1000-4999", "5000-9999", "10000+")),
+      useNA = "ifany")
+
+# Encode the df
+df_impute_mice_encoded[["education_level"]] <- encode_ordinal(df_impute_mice_encoded[["education_level"]],
+               order = c("Primary School", "High School", "Graduate", "Masters", "Phd"))
+df_impute_mice_encoded[["company_size"]] <- encode_ordinal(df_impute_mice_encoded[["company_size"]],
+               order = c("<10", "10/49", "50-99", "100-500", "500-999", 
+                         "1000-4999", "5000-9999", "10000+"))
+
+for (col in ordinalCol){
+   hist((df_impute_mice_encoded[[col]]), main=col, xlab=col)
+}
+
+```
+
+
+## Encoding - Nominal Variables
+Nominal variables: gender, enrolled_university, major_discipline, company_type
+Use dummyVars from caret Package
+```{r}
+nominalCol = c("gender", "enrolled_university", "major_discipline", "company_type")
+dummy <- caret::dummyVars(" ~ gender + enrolled_university + major_discipline + company_type", 
+                          data = df_impute_mice_encoded)
+dummy <- data.frame(predict(dummy, newdata = df_impute_mice_encoded))
+df_impute_mice_encoded <- cbind(subset(df_impute_mice_encoded, select=-c(gender, enrolled_university, major_discipline, company_type)), dummy)
+head(df_impute_mice_encoded, 5)
+```
+Other methods:
+1. mutate() by own dict
+2. factor(level, label)
+3. onehotencoding - dummify
+
+## Encoding - Binary
+Binary category variable: relevent_experience
+"Has relevent experience" --> 1
+"No relevent experience" --> 0
+```{r}
+levels(df_impute_mice_encoded$relevent_experience) <- c(levels(df_impute_mice_encoded$relevent_experience),"1","0")
+df_impute_mice_encoded$relevent_experience[df_impute_mice_encoded$relevent_experience=="Has relevent experience"]  <- "1" 
+df_impute_mice_encoded$relevent_experience[df_impute_mice_encoded$relevent_experience=="No relevent experience"]  <- "0"
+# Convert from factor to numeric
+df_impute_mice_encoded$relevent_experience <- as.numeric(as.character(df_impute_mice_encoded$relevent_experience))
+hist(df_impute_mice_encoded$relevent_experience)
+```
+
+After encoding: 
+```{r}
+head(df_impute_mice_encoded, 5)
+write.csv(df_impute_mice_encoded, file = "aug_train_mice_encoded.csv")
+```
+
+
+# Normalization
+min-max normalization
+Columns to be normalized: city_development_index, training_hours, experience
+```{r}
+normCol = c("city_development_index", "training_hours", "experience")
+
+#define Min-Max normalization function
+min_max_norm <- function(x) {
+    (x - min(x)) / (max(x) - min(x))
+}
+
+df_impute_mice_encoded_norm <- df_impute_mice_encoded
+df_impute_mice_encoded_norm[normCol] <- as.data.frame(lapply(df_impute_mice_encoded[normCol], min_max_norm))
+
+summary(df_impute_mice_encoded_norm[normCol])
+
+for (col in normCol){
+   plot(density(df_impute_mice_encoded_norm[[col]]), main=col)
+}
+```
+
+
+Finally, export the clean data (aug_train_clean.csv)
+```{r}
+write.csv(df_impute_mice_encoded_norm, file = "aug_train_clean.csv")
+```
