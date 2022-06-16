@@ -1,4 +1,4 @@
-# Lab 4: Multiple Linear Regression
+# Linear Regression
 
 # Read dataset
 df = read.csv('50_Startups.csv')
