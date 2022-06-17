@@ -5,3 +5,4 @@ Data Source: https://www.kaggle.com/datasets/arashnic/hr-analytics-job-change-of
 1. Exploratory Data Analysis
 2. Data Pre-Processing (Imputation, Encoding, Normalization)
 3. Linear Regression
+4. Logistic Regression
