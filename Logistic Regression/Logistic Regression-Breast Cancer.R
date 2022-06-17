@@ -1,4 +1,4 @@
-# Lab 5 Logistic Regression
+# Logistic Regression
 
 # Objective 1 - Perform Logistic Regression with and without preproccessing and compare the results.
 # Objective 2 - Compute sensitivity, specificity and AUC.  draw ROC curves  
