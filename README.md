@@ -8,3 +8,4 @@ Data Source: https://www.kaggle.com/datasets/arashnic/hr-analytics-job-change-of
 4. Logistic Regression
 5. Naive Bayes
 6. Regularization
+7. Decision Tree
