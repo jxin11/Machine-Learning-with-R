@@ -11,3 +11,6 @@ Data Source: https://www.kaggle.com/datasets/arashnic/hr-analytics-job-change-of
 7. Decision Tree
 8. SVM
 9. Random Forest
+10. Ensemble Learning
+
+[AML Lab APU Master Course Aug'22]
